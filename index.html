@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F1 Management System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>F1 Management System</h1>
+        </header>
+
+        <nav>
+            <a href="#" class="active">Drivers</a>
+            <a href="#">Teams</a>
+            <a href="#">Races</a>
+            <a href="#">Sponsors</a>
+        </nav>
+
+        <main>
+            <section class="card" id="driver-list">
+                <h2>Current Drivers</h2>
+                <table id="driver-table">
+                    <thead>
+                        <tr>
+                            <th>First Name</th>
+                            <th>Last Name</th>
+                            <th>Nationality</th>
+                            <th>DOB</th>
+                            <th>Championships</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        </tbody>
+                </table>
+            </section>
+
+            <section class="card" id="add-driver">
+                <h2>Add New Driver</h2>
+                <form id="add-driver-form">
+                    <div class="form-group">
+                        <label for="driver-firstname">First Name</label>
+                        <input type="text" id="driver-firstname" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="driver-lastname">Last Name</label>
+                        <input type="text" id="driver-lastname" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="driver-nationality">Nationality</label>
+                        <input type="text" id="driver-nationality" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="driver-dob">Date of Birth</label>
+                        <input type="date" id="driver-dob" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="driver-championships">Championships</label>
+                        <input type="number" id="driver-championships" value="0">
+                    </div>
+                    <button type="submit" class="btn-submit">Add Driver</button>
+                </form>
+            </section>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
