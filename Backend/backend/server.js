@@ -8,12 +8,17 @@ const port = 3001;
 app.use(cors());
 app.use(express.json());
 
+app.get("/", (req, res) => {
+  res.send("Server is alive!");
+});
+
 // --- Database Connection ---
 const db = mysql.createConnection({
-    host: "localhost",
+    host: "localhost",  
     user: "root",
-    password: "", 
-    database: "formulaOne" // Make sure this matches your database name
+    password: "", // Add your MySQL password if you have one
+    database: "formulaOne",
+    port: 3306
 });
 
 db.connect((err) => {
@@ -26,13 +31,10 @@ db.connect((err) => {
 
 // --- API Routes (Endpoints) ---
 
-// === NEW: API FOR VISUAL COMPONENTS ===
-// (These queries are now matched to your schema)
+// === API FOR VISUAL COMPONENTS ===
 
 // GET Driver Standings (for Drivers page, Podium, Standings table)
 app.get("/api/driver-standings", (req, res) => {
-    // This query now joins Driver with Contract and Team
-    // It uses Championships AS Points and Driver_ID AS Number
     const sql = `
         SELECT 
             d.Driver_ID, 
@@ -41,20 +43,19 @@ app.get("/api/driver-standings", (req, res) => {
             d.Nationality,
             d.DOB,
             d.Championships,
-            d.Championships AS Points,  -- COMPROMISE: Using Championships as Points
-            d.Driver_ID AS Number,      -- COMPROMISE: Using Driver_ID as Number
+            d.CurrentPoints AS Points,
+            d.DriverNumber AS Number,
             t.Name AS TeamName
         FROM Driver d
-        LEFT JOIN Contract c ON d.Driver_ID = c.Driver_ID
+        LEFT JOIN Contract c ON d.Driver_ID = c.Driver_ID 
+            AND (c.End_Date IS NULL OR c.End_Date >= CURDATE())
         LEFT JOIN Team t ON c.Team_ID = t.Team_ID
-        -- You might want to filter by active contracts, e.g.:
-        -- WHERE c.End_Date IS NULL OR c.End_Date > CURDATE()
-        ORDER BY Points DESC
+        ORDER BY d.CurrentPoints DESC, d.Championships DESC
     `;
     
     db.query(sql, (err, results) => {
         if (err) {
-            console.error(err);
+            console.error("Error fetching driver standings:", err);
             return res.status(500).json({ error: "Database error fetching driver standings" });
         }
         res.json(results);
@@ -63,16 +64,15 @@ app.get("/api/driver-standings", (req, res) => {
 
 // GET Team Standings (for Teams page, Team Standings table)
 app.get("/api/team-standings", (req, res) => {
-    // This query sums driver championships as 'TotalPoints'
-    // It gets the Engine from a subquery to the 'Cars' table
     const sql = `
         SELECT 
             t.Team_ID,
             t.Name,
             (SELECT Engine FROM Cars WHERE Cars.Team_ID = t.Team_ID LIMIT 1) AS Engine,
-            IFNULL(SUM(d.Championships), 0) AS TotalPoints
+            COALESCE(SUM(d.CurrentPoints), 0) AS TotalPoints
         FROM Team t
-        LEFT JOIN Contract con ON t.Team_ID = con.Team_ID
+        LEFT JOIN Contract con ON t.Team_ID = con.Team_ID 
+            AND (con.End_Date IS NULL OR con.End_Date >= CURDATE())
         LEFT JOIN Driver d ON con.Driver_ID = d.Driver_ID
         GROUP BY t.Team_ID, t.Name
         ORDER BY TotalPoints DESC
@@ -80,7 +80,7 @@ app.get("/api/team-standings", (req, res) => {
     
     db.query(sql, (err, results) => {
         if (err) {
-            console.error(err);
+            console.error("Error fetching team standings:", err);
             return res.status(500).json({ error: "Database error fetching team standings" });
         }
         res.json(results);
@@ -89,27 +89,50 @@ app.get("/api/team-standings", (req, res) => {
 
 // GET Races (for Races page and Homepage)
 app.get("/api/races", (req, res) => {
-    // Selects from your Race table. Note: No 'Date' column exists.
-    const sql = "SELECT Race_ID, Name, Location FROM Race ORDER BY Race_ID ASC";
+    const sql = `
+        SELECT 
+            Race_ID, 
+            Name, 
+            Location, 
+            RaceDate,
+            Details
+        FROM Race 
+        ORDER BY RaceDate ASC
+    `;
+    
     db.query(sql, (err, results) => {
         if (err) {
-            console.error(err);
+            console.error("Error fetching races:", err);
             return res.status(500).json({ error: "Database error fetching races" });
         }
         res.json(results);
     });
 });
 
-
 // === ADMIN PANEL API (for 'Driver' table) ===
-// (These routes were already correct for your 'Driver' table)
 
 // 1. GET all drivers (from your 'Driver' table)
 app.get("/api/drivers", (req, res) => {
-    const sql = "SELECT * FROM Driver"; 
+    const sql = `
+        SELECT 
+            d.Driver_ID,
+            d.FirstName,
+            d.LastName,
+            d.Nationality,
+            d.DOB,
+            d.Championships,
+            d.CurrentPoints,
+            t.Name AS TeamName
+        FROM Driver d
+        LEFT JOIN Contract c ON d.Driver_ID = c.Driver_ID 
+            AND (c.End_Date IS NULL OR c.End_Date >= CURDATE())
+        LEFT JOIN Team t ON c.Team_ID = t.Team_ID
+        ORDER BY d.Driver_ID
+    `;
+    
     db.query(sql, (err, results) => {
         if (err) {
-            console.error(err);
+            console.error("Error fetching drivers:", err);
             return res.status(500).json({ error: "Database error" });
         }
         res.json(results);
@@ -118,24 +141,30 @@ app.get("/api/drivers", (req, res) => {
 
 // 2. ADD a new driver (to your 'Driver' table)
 app.post("/api/drivers", (req, res) => {
-    const { FirstName, LastName, Nationality, DOB, Championships } = req.body;
+    const { FirstName, LastName, Nationality, DOB, Championships, CurrentPoints } = req.body;
 
     if (!FirstName || !LastName || !Nationality || !DOB) {
         return res.status(400).json({ error: "First name, last name, nationality, and DOB are required" });
     }
 
-    const sql = "INSERT INTO Driver (FirstName, LastName, Nationality, DOB, Championships) VALUES (?, ?, ?, ?, ?)";
+    const sql = `
+        INSERT INTO Driver 
+        (FirstName, LastName, Nationality, DOB, Championships, CurrentPoints) 
+        VALUES (?, ?, ?, ?, ?, ?)
+    `;
+    
     const values = [
         FirstName,
         LastName,
         Nationality,
         DOB,
-        Championships || 0
+        Championships || 0,
+        CurrentPoints || 0
     ];
 
     db.query(sql, values, (err, result) => {
         if (err) {
-            console.error(err);
+            console.error("Error adding driver:", err);
             return res.status(500).json({ error: "Database error" });
         }
         res.status(201).json({ 
@@ -144,7 +173,8 @@ app.post("/api/drivers", (req, res) => {
             LastName, 
             Nationality, 
             DOB, 
-            Championships 
+            Championships: Championships || 0,
+            CurrentPoints: CurrentPoints || 0
         });
     });
 });
@@ -156,7 +186,7 @@ app.delete("/api/drivers/:id", (req, res) => {
 
     db.query(sql, [id], (err, result) => {
         if (err) {
-            console.error(err);
+            console.error("Error deleting driver:", err);
             return res.status(500).json({ error: "Database error" });
         }
         if (result.affectedRows === 0) {
@@ -169,25 +199,32 @@ app.delete("/api/drivers/:id", (req, res) => {
 // 4. UPDATE a driver
 app.put("/api/drivers/:id", (req, res) => {
     const { id } = req.params;
-    const { FirstName, LastName, Nationality, DOB, Championships } = req.body;
+    const { FirstName, LastName, Nationality, DOB, Championships, CurrentPoints } = req.body;
 
     if (!FirstName || !LastName || !Nationality || !DOB) {
-        return res.status(400).json({ error: "All fields are required" });
+        return res.status(400).json({ error: "All required fields must be provided" });
     }
 
-    const sql = "UPDATE Driver SET FirstName = ?, LastName = ?, Nationality = ?, DOB = ?, Championships = ? WHERE Driver_ID = ?";
+    const sql = `
+        UPDATE Driver 
+        SET FirstName = ?, LastName = ?, Nationality = ?, DOB = ?, 
+            Championships = ?, CurrentPoints = ? 
+        WHERE Driver_ID = ?
+    `;
+    
     const values = [
         FirstName,
         LastName,
         Nationality,
         DOB,
         Championships || 0,
+        CurrentPoints || 0,
         id
     ];
 
     db.query(sql, values, (err, result) => {
         if (err) {
-            console.error(err);
+            console.error("Error updating driver:", err);
             return res.status(500).json({ error: "Database error" });
         }
         if (result.affectedRows === 0) {
@@ -199,13 +236,19 @@ app.put("/api/drivers/:id", (req, res) => {
             LastName, 
             Nationality, 
             DOB, 
-            Championships 
+            Championships: Championships || 0,
+            CurrentPoints: CurrentPoints || 0
         });
     });
 });
 
+// Health check endpoint
+app.get("/api/health", (req, res) => {
+    res.json({ status: "OK", message: "Backend is running" });
+});
 
 // --- Start the Server ---
 app.listen(port, () => {
     console.log(`Backend server running on http://localhost:${port}`);
+    console.log(`Test the API at http://localhost:${port}/api/health`);
 });

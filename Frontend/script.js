@@ -1,9 +1,8 @@
 /* ======== GLOBAL DATA CACHE ======== */
-// We will fetch data from the API and store it here
 let allDriverStandings = [];
 let allTeamStandings = [];
 let allRaces = [];
-let appDataLoaded = false; // Prevents multiple fetches
+let appDataLoaded = false;
 
 /* ======== DOM SELECTORS ======== */
 const navMenu = document.getElementById('nav-menu');
@@ -25,7 +24,6 @@ const formCancelBtn = document.getElementById('form-cancel-btn');
 let isEditMode = false;
 let editDriverId = null;
 
-
 /* ======== MOBILE MENU ======== */
 if (navToggle) {
     navToggle.addEventListener('click', () => {
@@ -45,11 +43,9 @@ navLinks.forEach(link => {
         e.preventDefault();
         const targetId = link.getAttribute('href').substring(1);
 
-        // Set active link
         navLinks.forEach(nav => nav.classList.remove('active-link'));
         link.classList.add('active-link');
 
-        // Show target page
         pages.forEach(page => {
             if (page.id === targetId) {
                 page.classList.add('active');
@@ -58,26 +54,20 @@ navLinks.forEach(link => {
             }
         });
 
-        // Load admin page data (if admin)
         if (targetId === 'admin') {
             loadAdminPage();
         }
 
-        // Close mobile menu
         navMenu.classList.remove('show-menu');
     });
 });
 
-// Set Home as default active page
 document.getElementById('home').classList.add('active');
-
 
 /* ======== DATA LOADING & POPULATION ======== */
 document.addEventListener('DOMContentLoaded', () => {
-    // Load all data on initial page load
     loadAllApplicationData();
 
-    // ======== ADMIN FORM LISTENERS ========
     if (driverForm) {
         driverForm.addEventListener('submit', handleFormSubmit);
     }
@@ -89,11 +79,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// NEW: Main data fetcher
+// Main data fetcher with better error handling
 async function loadAllApplicationData() {
-    if (appDataLoaded) return; // Don't load more than once
+    if (appDataLoaded) return;
 
     try {
+        // Test backend connection first
+        const healthCheck = await fetch(`${API_URL}/health`);
+        if (!healthCheck.ok) {
+            throw new Error('Backend server is not responding');
+        }
+
         // Fetch all data in parallel
         const [driverRes, teamRes, raceRes] = await Promise.all([
             fetch(`${API_URL}/driver-standings`),
@@ -109,7 +105,12 @@ async function loadAllApplicationData() {
         allTeamStandings = await teamRes.json();
         allRaces = await raceRes.json();
 
-        // Now populate all sections
+        console.log('Data loaded successfully:', {
+            drivers: allDriverStandings.length,
+            teams: allTeamStandings.length,
+            races: allRaces.length
+        });
+
         loadHomepageRaces();
         loadRaces();
         loadDrivers();
@@ -121,40 +122,67 @@ async function loadAllApplicationData() {
 
     } catch (error) {
         console.error("Error loading application data:", error);
-        alert("Error loading data from server. Is the backend running?");
+        showErrorMessage("Error loading data from server. Please check:\n1. Backend server is running (npm start in Backend folder)\n2. MySQL server is running\n3. Database 'formulaOne' exists");
     }
 }
 
-// 1. Load Homepage Races (Updated)
+// Error message helper
+function showErrorMessage(message) {
+    const errorDiv = document.createElement('div');
+    errorDiv.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#e74c3c;color:white;padding:1rem 2rem;border-radius:8px;z-index:9999;max-width:500px;text-align:center;';
+    errorDiv.textContent = message;
+    document.body.appendChild(errorDiv);
+    setTimeout(() => errorDiv.remove(), 8000);
+}
+
+// 1. Load Homepage Races
 function loadHomepageRaces() {
     const container = document.getElementById('upcoming-race-grid');
     if (!container) return;
     
-    // Get the first 3 races from the data
     const upcomingRaces = allRaces.slice(0, 3);
+    
+    if (upcomingRaces.length === 0) {
+        container.innerHTML = '<p style="text-align:center;color:var(--text-color-light);">No races available</p>';
+        return;
+    }
     
     let html = '';
     upcomingRaces.forEach(race => {
-        // const raceDate = new Date(race.Date).toLocaleDateString(); // No Date column
+        const raceDate = race.RaceDate ? new Date(race.RaceDate).toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        }) : 'TBA';
+        
         html += `
             <article class="upcoming-race-card">
                 <h3>${race.Name}</h3>
-                <p>${race.Location}</p>
-                <p><strong>Race ID: ${race.Race_ID}</strong></p> 
+                <p><strong>${race.Location}</strong></p>
+                <p style="color: var(--primary-color);">${raceDate}</p>
             </article>
         `;
     });
     container.innerHTML = html;
 }
 
-// 2. Load Races (Updated)
+// 2. Load Races
 function loadRaces() {
     const container = document.getElementById('race-list-container');
     if (!container) return;
     
+    if (allRaces.length === 0) {
+        container.innerHTML = '<p style="text-align:center;color:var(--text-color-light);">No races available</p>';
+        return;
+    }
+    
     let html = '';
     allRaces.forEach(race => {
-        // const raceDate = new Date(race.Date).toLocaleDateString(); // No Date column
+        const raceDate = race.RaceDate ? new Date(race.RaceDate).toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric' 
+        }) : 'TBA';
+        
         html += `
             <article class="race-card">
                 <div class="race-card-icon-placeholder">
@@ -163,7 +191,7 @@ function loadRaces() {
                 <div class="race-card-content">
                     <div>
                         <h3 class="race-card-title">${race.Name}</h3>
-                        <p class.race-card-date">${race.Location}</p>
+                        <p class="race-card-date">${raceDate}</p>
                     </div>
                     <span class="details-btn" data-modal-type="race" data-id="${race.Race_ID}">
                         View Details
@@ -175,10 +203,15 @@ function loadRaces() {
     container.innerHTML = html;
 }
 
-// 3. Load Drivers (Updated)
+// 3. Load Drivers
 function loadDrivers() {
     const container = document.getElementById('driver-grid-container');
     if (!container) return;
+    
+    if (allDriverStandings.length === 0) {
+        container.innerHTML = '<p style="text-align:center;color:var(--text-color-light);">No drivers available</p>';
+        return;
+    }
     
     let html = '';
     allDriverStandings.forEach(driver => {
@@ -187,17 +220,22 @@ function loadDrivers() {
                 <div class="driver-card-number">${driver.Number}</div>
                 <p class="driver-card-team">${driver.TeamName || 'No Team'}</p>
                 <h3 class="driver-card-name">${driver.FirstName} ${driver.LastName}</h3>
-                <p class="driver-card-points">${driver.Points} PTS</p>
+                <p class="driver-card-points">${driver.Points || 0} PTS</p>
             </article>
         `;
     });
     container.innerHTML = html;
 }
 
-// 4. Load Teams (Updated)
+// 4. Load Teams
 function loadTeams() {
     const container = document.getElementById('team-gallery-container');
     if (!container) return;
+
+    if (allTeamStandings.length === 0) {
+        container.innerHTML = '<p style="text-align:center;color:var(--text-color-light);">No teams available</p>';
+        return;
+    }
 
     let html = '';
     allTeamStandings.forEach(team => {
@@ -205,64 +243,71 @@ function loadTeams() {
             <div class="team-card">
                 <h3 class="team-card-name">${team.Name}</h3>
                 <p class="team-card-spec">Engine: ${team.Engine || 'N/A'}</p>
+                <p class="team-card-spec">Points: <strong>${team.TotalPoints || 0}</strong></p>
             </div>
         `;
     });
     container.innerHTML = html;
 }
 
-// 5. Load Standings (Updated)
+// 5. Load Standings
 function loadStandings() {
     const driverBody = document.getElementById('driver-standings-body');
     const teamBody = document.getElementById('team-standings-body');
 
     if (driverBody) {
-        let driverHtml = '';
-        allDriverStandings.forEach((driver, index) => {
-            driverHtml += `
-                <tr class="${index === 0 ? 'top-row' : ''}">
-                    <td>${index + 1}</td>
-                    <td>${driver.FirstName} ${driver.LastName}</td>
-                    <td>${driver.Nationality}</td>
-                    <td>${driver.TeamName || 'No Team'}</td>
-                    <td><strong>${driver.Points}</strong></td>
-                </tr>
-            `;
-        });
-        driverBody.innerHTML = driverHtml;
+        if (allDriverStandings.length === 0) {
+            driverBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No driver data available</td></tr>';
+        } else {
+            let driverHtml = '';
+            allDriverStandings.forEach((driver, index) => {
+                driverHtml += `
+                    <tr class="${index === 0 ? 'top-row' : ''}">
+                        <td>${index + 1}</td>
+                        <td>${driver.FirstName} ${driver.LastName}</td>
+                        <td>${driver.Nationality}</td>
+                        <td>${driver.TeamName || 'No Team'}</td>
+                        <td><strong>${driver.Points || 0}</strong></td>
+                    </tr>
+                `;
+            });
+            driverBody.innerHTML = driverHtml;
+        }
     }
 
     if (teamBody) {
-        let teamHtml = '';
-        allTeamStandings.forEach((team, index) => {
-            teamHtml += `
-                <tr class="${index === 0 ? 'top-row' : ''}">
-                    <td>${index + 1}</td>
-                    <td>${team.Name}</td>
-                    <td><strong>${team.TotalPoints}</strong></td>
-                </tr>
-            `;
-        });
-        teamBody.innerHTML = teamHtml;
+        if (allTeamStandings.length === 0) {
+            teamBody.innerHTML = '<tr><td colspan="3" style="text-align:center;">No team data available</td></tr>';
+        } else {
+            let teamHtml = '';
+            allTeamStandings.forEach((team, index) => {
+                teamHtml += `
+                    <tr class="${index === 0 ? 'top-row' : ''}">
+                        <td>${index + 1}</td>
+                        <td>${team.Name}</td>
+                        <td><strong>${team.TotalPoints || 0}</strong></td>
+                    </tr>
+                `;
+            });
+            teamBody.innerHTML = teamHtml;
+        }
     }
 }
 
-// 6. Load Podium (Updated)
+// 6. Load Podium
 function loadPodium() {
     const container = document.getElementById('podium-grid-container');
     if (!container) return;
 
-    // We assume data is already sorted by points from the API
     const podiumDrivers = {
         pos1: allDriverStandings.length > 0 ? allDriverStandings[0] : null,
         pos2: allDriverStandings.length > 1 ? allDriverStandings[1] : null,
         pos3: allDriverStandings.length > 2 ? allDriverStandings[2] : null
     };
 
-    // Helper function to create card HTML
     const createPodiumCard = (driver, pos) => {
         if (!driver) {
-             return `<div class="podium-card pos-${pos}"><h3 class="podium-name">N/A</h3></div>`; // Handle empty data
+             return `<div class="podium-card pos-${pos}"><h3 class="podium-name">N/A</h3></div>`;
         }
         let rankText = (pos === 1) ? "1<span>st</span>" : (pos === 2) ? "2<span>nd</span>" : "3<span>rd</span>";
         return `
@@ -271,12 +316,11 @@ function loadPodium() {
                 <div class="podium-number">${driver.Number}</div>
                 <h3 class="podium-name">${driver.FirstName} ${driver.LastName}</h3>
                 <p class="podium-team">${driver.TeamName || 'No Team'}</p>
-                <p class="podium-points">${driver.Points} PTS</p>
+                <p class="podium-points">${driver.Points || 0} PTS</p>
             </div>
         `;
     };
 
-    // Build HTML in 2-1-3 order for the grid layout
     let html = '';
     html += createPodiumCard(podiumDrivers.pos2, 2);
     html += createPodiumCard(podiumDrivers.pos1, 1);
@@ -285,21 +329,15 @@ function loadPodium() {
     container.innerHTML = html;
 }
 
-
-/* ======== MODAL & INTERACTIVITY (Event Delegation) ======== */
+/* ======== MODAL & INTERACTIVITY ======== */
 const modalBody = document.getElementById('modal-body');
 
 document.addEventListener('click', (e) => {
-    // --- Tab Switching Logic ---
     const tabBtn = e.target.closest('.tab-btn');
     if (tabBtn) {
         const tabId = tabBtn.dataset.tab;
-
-        // Update tab buttons
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
         tabBtn.classList.add('active');
-
-        // Update tab panels
         document.querySelectorAll('.tab-panel').forEach(panel => {
             if (panel.id === `tab-${tabId}`) {
                 panel.classList.add('active');
@@ -309,7 +347,6 @@ document.addEventListener('click', (e) => {
         });
     }
 
-    // --- Modal Logic (Updated) ---
     const modalBtn = e.target.closest('[data-modal-type]');
     if (modalBtn) {
         const type = modalBtn.dataset.modalType;
@@ -318,16 +355,37 @@ document.addEventListener('click', (e) => {
         if (type === 'race') {
             const race = allRaces.find(r => r.Race_ID.toString() === id);
             if (!race) return;
+            
+            const raceDate = race.RaceDate ? new Date(race.RaceDate).toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            }) : 'TBA';
+            
             modalBody.innerHTML = `
                 <h2 class="modal-title">${race.Name}</h2>
-                <p style="margin-bottom: 1rem;"><strong>Location: ${race.Location}</strong></p>
-                <!-- <p>${race.Details}</p> -- No Details column in your schema -->
+                <div class="modal-stat">
+                    <span>Location</span>
+                    <strong>${race.Location}</strong>
+                </div>
+                <div class="modal-stat">
+                    <span>Date</span>
+                    <strong>${raceDate}</strong>
+                </div>
+                ${race.Details ? `<p style="margin-top:1rem;">${race.Details}</p>` : ''}
             `;
         }
         
         if (type === 'driver') {
             const driver = allDriverStandings.find(d => d.Driver_ID.toString() === id);
             if (!driver) return;
+            
+            const dob = driver.DOB ? new Date(driver.DOB).toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            }) : 'N/A';
+            
             modalBody.innerHTML = `
                 <h2 class="modal-title">${driver.FirstName} ${driver.LastName} #${driver.Number}</h2>
                 <div class="modal-stat">
@@ -339,12 +397,16 @@ document.addEventListener('click', (e) => {
                     <strong>${driver.Nationality}</strong>
                 </div>
                 <div class="modal-stat">
-                    <span>Points (Champs)</span>
-                    <strong>${driver.Points}</strong>
+                    <span>Date of Birth</span>
+                    <strong>${dob}</strong>
                 </div>
                 <div class="modal-stat">
-                    <span>Championships</span>
-                    <strong>${driver.Championships}</strong>
+                    <span>Current Season Points</span>
+                    <strong>${driver.Points || 0}</strong>
+                </div>
+                <div class="modal-stat">
+                    <span>World Championships</span>
+                    <strong>${driver.Championships || 0}</strong>
                 </div>
             `;
         }
@@ -353,7 +415,6 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// Close Modal
 modalCloseBtn.addEventListener('click', () => {
     modalContainer.classList.remove('active');
 });
@@ -364,22 +425,24 @@ modalContainer.addEventListener('click', (e) => {
     }
 });
 
-// ======== ADMIN CRUD FUNCTIONS ========
-// This section handles the /api/drivers endpoint
+/* ======== ADMIN CRUD FUNCTIONS ======== */
 
-// 1. (R)EAD: Load admin page (fetch drivers and render table)
 async function loadAdminPage() {
-    if (!driverTableBody) return; // Don't run if we're not on the admin page
+    if (!driverTableBody) return;
     
     try {
         const response = await fetch(`${API_URL}/drivers`);
         if (!response.ok) throw new Error('Failed to fetch drivers');
         const drivers = await response.json();
         
-        // Render the table
-        driverTableBody.innerHTML = ''; // Clear existing table
+        driverTableBody.innerHTML = '';
+        
+        if (drivers.length === 0) {
+            driverTableBody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No drivers in database</td></tr>';
+            return;
+        }
+        
         drivers.forEach(driver => {
-            // Format DOB to YYYY-MM-DD
             const dob = new Date(driver.DOB).toISOString().split('T')[0];
             
             const row = document.createElement('tr');
@@ -389,40 +452,40 @@ async function loadAdminPage() {
                 <td>${driver.LastName}</td>
                 <td>${driver.Nationality}</td>
                 <td>${dob}</td>
-                <td>${driver.Championships}</td>
+                <td>${driver.Championships || 0}</td>
                 <td>
                     <button class="btn-action btn-edit" data-id="${driver.Driver_ID}">Edit</button>
                     <button class="btn-action btn-delete" data-id="${driver.Driver_ID}">Delete</button>
                 </td>
             `;
-            // Store the full driver data on the row for easy editing
             row.dataset.driver = JSON.stringify(driver);
             driverTableBody.appendChild(row);
         });
     } catch (error) {
         console.error("Error loading admin page:", error);
-        driverTableBody.innerHTML = `<tr><td colspan="7">Error loading drivers. Is the server running?</td></tr>`;
+        driverTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#e74c3c;">Error: ${error.message}</td></tr>`;
     }
 }
 
-// 2. (C)REATE & (U)PDATE: Handle form submission
 async function handleFormSubmit(e) {
     e.preventDefault();
     
     const formData = new FormData(driverForm);
     const driverData = Object.fromEntries(formData.entries());
     
+    // Disable submit button
+    formSubmitBtn.disabled = true;
+    formSubmitBtn.textContent = isEditMode ? 'Updating...' : 'Adding...';
+    
     try {
         let response;
         if (isEditMode) {
-            // --- UPDATE (PUT) ---
             response = await fetch(`${API_URL}/drivers/${editDriverId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(driverData)
             });
         } else {
-            // --- CREATE (POST) ---
             response = await fetch(`${API_URL}/drivers`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -435,21 +498,34 @@ async function handleFormSubmit(e) {
             throw new Error(err.error || 'API request failed');
         }
         
-        // Success
+        showSuccessMessage(isEditMode ? 'Driver updated successfully!' : 'Driver added successfully!');
         resetForm();
-        loadAdminPage(); // Refresh the table
+        loadAdminPage();
+        
+        // Refresh main data
+        appDataLoaded = false;
+        loadAllApplicationData();
         
     } catch (error) {
         console.error("Error saving driver:", error);
         alert(`Error: ${error.message}`);
+    } finally {
+        formSubmitBtn.disabled = false;
+        formSubmitBtn.textContent = isEditMode ? 'Update Driver' : 'Add Driver';
     }
 }
 
-// 3. (D)ELETE & (U)PDATE-Trigger: Handle clicks on Edit/Delete buttons
+function showSuccessMessage(message) {
+    const successDiv = document.createElement('div');
+    successDiv.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#27ae60;color:white;padding:1rem 2rem;border-radius:8px;z-index:9999;';
+    successDiv.textContent = message;
+    document.body.appendChild(successDiv);
+    setTimeout(() => successDiv.remove(), 3000);
+}
+
 function handleTableClick(e) {
     const target = e.target;
     
-    // --- DELETE ---
     if (target.classList.contains('btn-delete')) {
         const id = target.dataset.id;
         if (confirm(`Are you sure you want to delete driver ID ${id}?`)) {
@@ -457,31 +533,26 @@ function handleTableClick(e) {
         }
     }
     
-    // --- EDIT (Trigger) ---
     if (target.classList.contains('btn-edit')) {
         const row = target.closest('tr');
         const driver = JSON.parse(row.dataset.driver);
         
-        // Fill the form
         driverForm.elements.FirstName.value = driver.FirstName;
         driverForm.elements.LastName.value = driver.LastName;
         driverForm.elements.Nationality.value = driver.Nationality;
         driverForm.elements.DOB.value = new Date(driver.DOB).toISOString().split('T')[0];
-        driverForm.elements.Championships.value = driver.Championships;
+        driverForm.elements.Championships.value = driver.Championships || 0;
         
-        // Set edit mode
         isEditMode = true;
         editDriverId = driver.Driver_ID;
         formTitle.textContent = `Edit Driver (ID: ${driver.Driver_ID})`;
         formSubmitBtn.textContent = "Update Driver";
         formCancelBtn.style.display = 'inline-block';
         
-        // Scroll to form
         driverForm.scrollIntoView({ behavior: 'smooth' });
     }
 }
 
-// 4. (D)ELETE: Actual delete function
 async function deleteDriver(id) {
     try {
         const response = await fetch(`${API_URL}/drivers/${id}`, {
@@ -493,8 +564,12 @@ async function deleteDriver(id) {
             throw new Error(err.error || 'API request failed');
         }
         
-        // Success
-        loadAdminPage(); // Refresh the table
+        showSuccessMessage('Driver deleted successfully!');
+        loadAdminPage();
+        
+        // Refresh main data
+        appDataLoaded = false;
+        loadAllApplicationData();
         
     } catch (error) {
         console.error("Error deleting driver:", error);
@@ -502,7 +577,6 @@ async function deleteDriver(id) {
     }
 }
 
-// 5. Helper function to reset the form
 function resetForm() {
     driverForm.reset();
     isEditMode = false;
