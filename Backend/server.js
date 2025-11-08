@@ -15,9 +15,6 @@ app.get("/", (req, res) => {
 });
 
 // --- Database Connection ---
-import mysql from "mysql2";
-import dotenv from "dotenv";
-dotenv.config();
 
 const db = mysql.createConnection(process.env.DATABASE_URL);
 
@@ -27,14 +24,6 @@ db.connect((err) => {
     return;
   }
   console.log("✅ Successfully connected to MySQL database!");
-});
-
-db.connect((err) => {
-    if (err) {
-        console.error("Error connecting to database:", err);
-        return;
-    }
-    console.log("Successfully connected to MySQL database!");
 });
 
 // --- API Routes (Endpoints) ---
