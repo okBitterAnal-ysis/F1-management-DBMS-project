@@ -92,9 +92,9 @@ async function loadAllApplicationData() {
 
         // Fetch all data in parallel
         const [driverRes, teamRes, raceRes] = await Promise.all([
-            fetch(`${API_URL}/driver-standings`),
-            fetch(`${API_URL}/team-standings`),
-            fetch(`${API_URL}/races`)
+            fetch(`${API_URL}/api/driver-standings`),
+            fetch(`${API_URL}/api/team-standings`),
+            fetch(`${API_URL}/api/races`)
         ]);
 
         if (!driverRes.ok) throw new Error('Failed to fetch driver standings');
