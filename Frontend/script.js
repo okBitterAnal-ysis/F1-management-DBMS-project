@@ -14,7 +14,7 @@ const modalContainer = document.getElementById('modal-container');
 const modalCloseBtn = document.getElementById('modal-close-btn');
 
 // ======== ADMIN & API GLOBALS ========
-const API_URL = "http://localhost:3001/api";
+const API_URL = "f1-management-dbms-project-production.up.railway.app";
 const driverForm = document.getElementById('driver-form');
 const driverTableBody = document.getElementById('admin-driver-table-body');
 const formTitle = document.getElementById('form-title');
