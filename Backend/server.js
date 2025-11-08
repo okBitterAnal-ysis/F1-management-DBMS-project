@@ -7,7 +7,13 @@ const cors = require("cors");
 const app = express();
 const port = 3001; 
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    "https://f1management-dbms.netlify.app/", // your deployed frontend
+    "http://localhost:5500"                   // optional: for local testing
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE"],
+}));
 app.use(express.json());
 
 app.get("/", (req, res) => {
