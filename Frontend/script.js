@@ -431,7 +431,7 @@ async function loadAdminPage() {
     if (!driverTableBody) return;
     
     try {
-        const response = await fetch(`${API_URL}/drivers`);
+        const response = await fetch(`${API_URL}/api/drivers`);
         if (!response.ok) throw new Error('Failed to fetch drivers');
         const drivers = await response.json();
         
@@ -480,13 +480,13 @@ async function handleFormSubmit(e) {
     try {
         let response;
         if (isEditMode) {
-            response = await fetch(`${API_URL}/drivers/${editDriverId}`, {
+            response = await fetch(`${API_URL}/api/drivers/${editDriverId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(driverData)
             });
         } else {
-            response = await fetch(`${API_URL}/drivers`, {
+            response = await fetch(`${API_URL}/api/api/drivers`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(driverData)
@@ -555,7 +555,7 @@ function handleTableClick(e) {
 
 async function deleteDriver(id) {
     try {
-        const response = await fetch(`${API_URL}/drivers/${id}`, {
+        const response = await fetch(`${API_URL}/api/drivers/${id}`, {
             method: 'DELETE'
         });
         
