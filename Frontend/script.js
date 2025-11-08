@@ -85,7 +85,7 @@ async function loadAllApplicationData() {
 
     try {
         // Test backend connection first
-        const healthCheck = await fetch(`${API_URL}/health`);
+        const healthCheck = await fetch(`${API_URL}/api/health`);
         if (!healthCheck.ok) {
             throw new Error('Backend server is not responding');
         }
