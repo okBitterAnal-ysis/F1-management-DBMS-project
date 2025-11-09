@@ -140,7 +140,10 @@ function loadHomepageRaces() {
     const container = document.getElementById('upcoming-race-grid');
     if (!container) return;
     
-    const upcomingRaces = allRaces.slice(0, 3);
+    const today = new Date();
+const upcomingRaces = allRaces
+    .filter(race => new Date(race.RaceDate) >= today)
+    .slice(0, 3);
     
     if (upcomingRaces.length === 0) {
         container.innerHTML = '<p style="text-align:center;color:var(--text-color-light);">No races available</p>';
