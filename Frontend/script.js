@@ -486,7 +486,7 @@ async function handleFormSubmit(e) {
                 body: JSON.stringify(driverData)
             });
         } else {
-            response = await fetch(`${API_URL}/api/api/drivers`, {
+            response = await fetch(`${API_URL}/api/drivers`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(driverData)

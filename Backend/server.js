@@ -9,7 +9,7 @@ const port = 3001;
 
 app.use(cors({
   origin: [
-    // "https://f1management-dbms.netlify.app", // your deployed frontend
+    "https://f1management-dbms.netlify.app", // your deployed frontend
     "http://localhost:5500"                   // optional: for local testing
   ],
   methods: ["GET", "POST", "PUT", "DELETE"],
