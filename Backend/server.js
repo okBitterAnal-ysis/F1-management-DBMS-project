@@ -5,14 +5,20 @@ const mysql = require("mysql2");
 const cors = require("cors");
 
 const app = express();
-const port = 3001; 
-
+const allowedOrigins = [
+  "https://f1management.netlify.app",
+  "https://f1-management.netlify.app",
+  "http://localhost:5500"
+];
 app.use(cors({
-  origin: [
-    "https://f1management-dbms.netlify.app", // your deployed frontend
-    "http://localhost:5500"                   // optional: for local testing
-  ],
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("CORS not allowed"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE"]
 }));
 app.use(express.json());
 
@@ -23,13 +29,12 @@ app.get("/", (req, res) => {
 // --- Database Connection ---
 
 const db = mysql.createConnection(process.env.DATABASE_URL);
-
 db.connect((err) => {
   if (err) {
-    console.error("❌ Error connecting to database:", err);
-    return;
+    console.error("❌ Database connection failed:", err.message);
+  } else {
+    console.log("✅ Connected to MySQL database");
   }
-  console.log("✅ Successfully connected to MySQL database!");
 });
 
 // --- API Routes (Endpoints) ---
@@ -251,7 +256,6 @@ app.get("/api/health", (req, res) => {
 });
 
 // --- Start the Server ---
-app.listen(port, () => {
-    console.log(`Backend server running on http://localhost:${port}`);
-    console.log(`Test the API at http://localhost:${port}/api/health`);
+app.listen(process.env.PORT || 3001, "0.0.0.0", () => {
+    console.log(`🚀 Server running on port ${process.env.PORT || 3001}`);
 });
