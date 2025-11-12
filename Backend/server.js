@@ -34,9 +34,9 @@ db.connect((err) => {
   if (err) {
     console.error("❌ Error connecting to database:", err);
     console.error("Connection details:", {
-      host: process.env.DB_HOST || 'Not set',
-      user: process.env.DB_USER || 'Not set',
-      database: process.env.DB_NAME || 'Not set'
+      host: process.env.MYSQLHOST || 'Not set',
+      user: process.env.MYSQLUSER || 'Not set',
+      database: process.env.MYSQLNAME || 'Not set'
     });
     return;
   }
