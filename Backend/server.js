@@ -5,63 +5,97 @@ const mysql = require("mysql2");
 const cors = require("cors");
 
 const app = express();
-// Use Railway's PORT or fallback to 3001 for local development
 const port = process.env.PORT || 3001; 
 
+// FIXED: More permissive CORS for Vercel
 app.use(cors({
-  origin: [
-    "https://f1management.vercel.app", // Updated for Vercel
-    "https://*.vercel.app", // Allow all Vercel preview deployments
-    "http://localhost:5500",
-    "http://127.0.0.1:5500",
-    "http://localhost:5501",
-    "http://127.0.0.1:5501"
-  ],
+  origin: function(origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Allow any Vercel domain or localhost
+    const allowedOrigins = [
+      /\.vercel\.app$/,
+      /^https:\/\/f1management\.vercel\.app$/,
+      /^http:\/\/localhost/,
+      /^http:\/\/127\.0\.0\.1/
+    ];
+    
+    if (allowedOrigins.some(pattern => pattern.test(origin))) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(null, true); // Still allow for now during debugging
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true
+  credentials: true,
+  optionsSuccessStatus: 200
 }));
+
 app.use(express.json());
 
 app.get("/", (req, res) => {
-  res.send("Server is alive!");
+  res.json({ 
+    status: "Server is alive!",
+    timestamp: new Date().toISOString()
+  });
 });
 
-// --- Database Connection ---
-const db = mysql.createConnection(process.env.DATABASE_URL);
+// FIXED: Database Connection - use public host for external connections
+const dbConfig = {
+  host: process.env.MYSQLHOST || 'mysql.railway.internal',
+  user: process.env.MYSQLUSER || 'root',
+  password: process.env.MYSQLPASSWORD,
+  database: process.env.MYSQLNAME || 'railway',
+  port: process.env.MYSQLPORT || 3306,
+  connectTimeout: 10000,
+  // Add SSL configuration for Railway
+  ssl: process.env.NODE_ENV === 'production' ? {
+    rejectUnauthorized: false
+  } : false
+};
 
-// Add connection error handling
-db.connect((err) => {
+// Use createPool instead of createConnection for better reliability
+const db = mysql.createPool(dbConfig);
+
+// Test the connection
+db.getConnection((err, connection) => {
   if (err) {
     console.error("❌ Error connecting to database:", err);
-    console.error("Connection details:", {
-      host: process.env.MYSQLHOST || 'Not set',
-      user: process.env.MYSQLUSER || 'Not set',
-      database: process.env.MYSQLNAME || 'Not set'
+    console.error("Connection config:", {
+      host: dbConfig.host,
+      user: dbConfig.user,
+      database: dbConfig.database,
+      port: dbConfig.port
     });
     return;
   }
   console.log("✅ Successfully connected to MySQL database!");
+  connection.release();
 });
 
-// Add connection error listener
-db.on('error', (err) => {
-  console.error('Database error:', err);
-  if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-    console.error('Database connection was closed.');
-  }
-  if (err.code === 'ER_CON_COUNT_ERROR') {
-    console.error('Database has too many connections.');
-  }
-  if (err.code === 'ECONNREFUSED') {
-    console.error('Database connection was refused.');
-  }
+// Health check endpoint - IMPROVED
+app.get("/api/health", (req, res) => {
+  db.query("SELECT 1", (err) => {
+    if (err) {
+      return res.status(500).json({ 
+        status: "ERROR", 
+        message: "Database connection failed",
+        error: err.message 
+      });
+    }
+    res.json({ 
+      status: "OK", 
+      message: "Backend and database are running",
+      timestamp: new Date().toISOString()
+    });
+  });
 });
-
-// --- API Routes (Endpoints) ---
 
 // === API FOR VISUAL COMPONENTS ===
 
-// GET Driver Standings (for Drivers page, Podium, Standings table)
+// GET Driver Standings
 app.get("/api/driver-standings", (req, res) => {
     const sql = `
         SELECT 
@@ -84,13 +118,16 @@ app.get("/api/driver-standings", (req, res) => {
     db.query(sql, (err, results) => {
         if (err) {
             console.error("Error fetching driver standings:", err);
-            return res.status(500).json({ error: "Database error fetching driver standings" });
+            return res.status(500).json({ 
+              error: "Database error fetching driver standings",
+              details: err.message 
+            });
         }
         res.json(results);
     });
 });
 
-// GET Team Standings (for Teams page, Team Standings table)
+// GET Team Standings
 app.get("/api/team-standings", (req, res) => {
     const sql = `
         SELECT 
@@ -109,13 +146,16 @@ app.get("/api/team-standings", (req, res) => {
     db.query(sql, (err, results) => {
         if (err) {
             console.error("Error fetching team standings:", err);
-            return res.status(500).json({ error: "Database error fetching team standings" });
+            return res.status(500).json({ 
+              error: "Database error fetching team standings",
+              details: err.message 
+            });
         }
         res.json(results);
     });
 });
 
-// GET Races (for Races page and Homepage)
+// GET Races
 app.get("/api/races", (req, res) => {
     const sql = `
         SELECT 
@@ -131,15 +171,18 @@ app.get("/api/races", (req, res) => {
     db.query(sql, (err, results) => {
         if (err) {
             console.error("Error fetching races:", err);
-            return res.status(500).json({ error: "Database error fetching races" });
+            return res.status(500).json({ 
+              error: "Database error fetching races",
+              details: err.message 
+            });
         }
         res.json(results);
     });
 });
 
-// === ADMIN PANEL API (for 'Driver' table) ===
+// === ADMIN PANEL API ===
 
-// 1. GET all drivers (from your 'Driver' table)
+// GET all drivers
 app.get("/api/drivers", (req, res) => {
     const sql = `
         SELECT 
@@ -161,13 +204,16 @@ app.get("/api/drivers", (req, res) => {
     db.query(sql, (err, results) => {
         if (err) {
             console.error("Error fetching drivers:", err);
-            return res.status(500).json({ error: "Database error" });
+            return res.status(500).json({ 
+              error: "Database error",
+              details: err.message 
+            });
         }
         res.json(results);
     });
 });
 
-// 2. ADD a new driver (to your 'Driver' table)
+// ADD a new driver
 app.post("/api/drivers", (req, res) => {
     const { FirstName, LastName, Nationality, DOB, Championships, CurrentPoints } = req.body;
 
@@ -193,7 +239,10 @@ app.post("/api/drivers", (req, res) => {
     db.query(sql, values, (err, result) => {
         if (err) {
             console.error("Error adding driver:", err);
-            return res.status(500).json({ error: "Database error" });
+            return res.status(500).json({ 
+              error: "Database error",
+              details: err.message 
+            });
         }
         res.status(201).json({ 
             Driver_ID: result.insertId, 
@@ -207,7 +256,7 @@ app.post("/api/drivers", (req, res) => {
     });
 });
 
-// 3. DELETE a driver (from your 'Driver' table)
+// DELETE a driver
 app.delete("/api/drivers/:id", (req, res) => {
     const { id } = req.params; 
     const sql = "DELETE FROM Driver WHERE Driver_ID = ?"; 
@@ -215,7 +264,10 @@ app.delete("/api/drivers/:id", (req, res) => {
     db.query(sql, [id], (err, result) => {
         if (err) {
             console.error("Error deleting driver:", err);
-            return res.status(500).json({ error: "Database error" });
+            return res.status(500).json({ 
+              error: "Database error",
+              details: err.message 
+            });
         }
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: "Driver not found" });
@@ -224,7 +276,7 @@ app.delete("/api/drivers/:id", (req, res) => {
     });
 });
 
-// 4. UPDATE a driver
+// UPDATE a driver
 app.put("/api/drivers/:id", (req, res) => {
     const { id } = req.params;
     const { FirstName, LastName, Nationality, DOB, Championships, CurrentPoints } = req.body;
@@ -253,7 +305,10 @@ app.put("/api/drivers/:id", (req, res) => {
     db.query(sql, values, (err, result) => {
         if (err) {
             console.error("Error updating driver:", err);
-            return res.status(500).json({ error: "Database error" });
+            return res.status(500).json({ 
+              error: "Database error",
+              details: err.message 
+            });
         }
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: "Driver not found" });
@@ -270,14 +325,10 @@ app.put("/api/drivers/:id", (req, res) => {
     });
 });
 
-// Health check endpoint
-app.get("/api/health", (req, res) => {
-    res.json({ status: "OK", message: "Backend is running" });
-});
-
-// --- Start the Server ---
+// Start the Server
 app.listen(port, '0.0.0.0', () => {
-    console.log(`Backend server running on port ${port}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Test the API at http://localhost:${port}/api/health`);
+    console.log(`🚀 Backend server running on port ${port}`);
+    console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔗 Health check: http://localhost:${port}/api/health`);
+    console.log(`🗄️  Database: ${dbConfig.database}@${dbConfig.host}`);
 });
