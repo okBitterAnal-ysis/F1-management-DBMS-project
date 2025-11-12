@@ -5,14 +5,20 @@ const mysql = require("mysql2");
 const cors = require("cors");
 
 const app = express();
-const port = 3001; 
+// Use Railway's PORT or fallback to 3001 for local development
+const port = process.env.PORT || 3001; 
 
 app.use(cors({
   origin: [
-    "https://f1management-dbms.netlify.app", // your deployed frontend
-    "http://localhost:5500"                   // optional: for local testing
+    "https://f1management.vercel.app", // Updated for Vercel
+    "https://*.vercel.app", // Allow all Vercel preview deployments
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
+    "http://localhost:5501",
+    "http://127.0.0.1:5501"
   ],
   methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true
 }));
 app.use(express.json());
 
@@ -21,15 +27,34 @@ app.get("/", (req, res) => {
 });
 
 // --- Database Connection ---
-
 const db = mysql.createConnection(process.env.DATABASE_URL);
 
+// Add connection error handling
 db.connect((err) => {
   if (err) {
     console.error("❌ Error connecting to database:", err);
+    console.error("Connection details:", {
+      host: process.env.DB_HOST || 'Not set',
+      user: process.env.DB_USER || 'Not set',
+      database: process.env.DB_NAME || 'Not set'
+    });
     return;
   }
   console.log("✅ Successfully connected to MySQL database!");
+});
+
+// Add connection error listener
+db.on('error', (err) => {
+  console.error('Database error:', err);
+  if (err.code === 'PROTOCOL_CONNECTION_LOST') {
+    console.error('Database connection was closed.');
+  }
+  if (err.code === 'ER_CON_COUNT_ERROR') {
+    console.error('Database has too many connections.');
+  }
+  if (err.code === 'ECONNREFUSED') {
+    console.error('Database connection was refused.');
+  }
 });
 
 // --- API Routes (Endpoints) ---
@@ -251,7 +276,8 @@ app.get("/api/health", (req, res) => {
 });
 
 // --- Start the Server ---
-app.listen(port, () => {
-    console.log(`Backend server running on http://localhost:${port}`);
+app.listen(port, '0.0.0.0', () => {
+    console.log(`Backend server running on port ${port}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`Test the API at http://localhost:${port}/api/health`);
 });
