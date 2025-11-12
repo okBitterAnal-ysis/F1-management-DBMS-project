@@ -16,11 +16,13 @@ app.use(cors({
     
     // Allow any Vercel domain or localhost
     const allowedOrigins = [
-      /\.vercel\.app$/,
-      /^https:\/\/f1management\.vercel\.app$/,
-      /^http:\/\/localhost/,
-      /^http:\/\/127\.0\.0\.1/
-    ];
+  /\.vercel\.app$/,
+  /^https:\/\/f1management\.vercel\.app$/,
+  /^https:\/\/f1-management\.vercel\.app$/,
+  /^https:\/\/f1-management\.up\.railway\.app$/,
+  /^http:\/\/localhost/,
+  /^http:\/\/127\.0\.0\.1/
+];
     
     if (allowedOrigins.some(pattern => pattern.test(origin))) {
       callback(null, true);
