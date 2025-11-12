@@ -14,9 +14,7 @@ const modalContainer = document.getElementById('modal-container');
 const modalCloseBtn = document.getElementById('modal-close-btn');
 
 // ======== ADMIN & API GLOBALS ========
-const API_URL = window.location.hostname.includes("localhost")
-    ? "http://localhost:3001"
-    : "https://f1-management-backend.onrender.com"; // Replace with your actual Render backend URL
+const API_URL = "https://f1-management-dbms-project-production.up.railway.app";
 const driverForm = document.getElementById('driver-form');
 const driverTableBody = document.getElementById('admin-driver-table-body');
 const formTitle = document.getElementById('form-title');
