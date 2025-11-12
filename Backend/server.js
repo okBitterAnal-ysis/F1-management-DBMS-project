@@ -5,7 +5,8 @@ const mysql = require("mysql2");
 const cors = require("cors");
 
 const app = express();
-const port = process.env.PORT || 3001; 
+// Railway automatically sets PORT environment variable
+const port = process.env.PORT || 8080; 
 
 // FIXED: More permissive CORS for Vercel
 app.use(cors({
@@ -38,23 +39,30 @@ app.use(express.json());
 app.get("/", (req, res) => {
   res.json({ 
     status: "Server is alive!",
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    port: port
   });
 });
 
-// FIXED: Database Connection - use public host for external connections
+// FIXED: Database Connection using environment variables
 const dbConfig = {
-  host: process.env.MYSQLHOST || 'mysql.railway.internal',
-  user: process.env.MYSQLUSER || 'root',
+  host: process.env.MYSQLHOST,
+  user: process.env.MYSQLUSER,
   password: process.env.MYSQLPASSWORD,
-  database: process.env.MYSQLNAME || 'railway',
+  database: process.env.MYSQLDATABASE || process.env.MYSQLNAME,
   port: process.env.MYSQLPORT || 3306,
   connectTimeout: 10000,
-  // Add SSL configuration for Railway
-  ssl: process.env.NODE_ENV === 'production' ? {
-    rejectUnauthorized: false
-  } : false
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
 };
+
+console.log('🔧 Database config:', {
+  host: dbConfig.host,
+  user: dbConfig.user,
+  database: dbConfig.database,
+  port: dbConfig.port
+});
 
 // Use createPool instead of createConnection for better reliability
 const db = mysql.createPool(dbConfig);
@@ -62,13 +70,7 @@ const db = mysql.createPool(dbConfig);
 // Test the connection
 db.getConnection((err, connection) => {
   if (err) {
-    console.error("❌ Error connecting to database:", err);
-    console.error("Connection config:", {
-      host: dbConfig.host,
-      user: dbConfig.user,
-      database: dbConfig.database,
-      port: dbConfig.port
-    });
+    console.error("❌ Error connecting to database:", err.message);
     return;
   }
   console.log("✅ Successfully connected to MySQL database!");
@@ -77,8 +79,9 @@ db.getConnection((err, connection) => {
 
 // Health check endpoint - IMPROVED
 app.get("/api/health", (req, res) => {
-  db.query("SELECT 1", (err) => {
+  db.query("SELECT 1 as result", (err, results) => {
     if (err) {
+      console.error("Health check failed:", err.message);
       return res.status(500).json({ 
         status: "ERROR", 
         message: "Database connection failed",
@@ -88,7 +91,9 @@ app.get("/api/health", (req, res) => {
     res.json({ 
       status: "OK", 
       message: "Backend and database are running",
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      database: dbConfig.database,
+      port: port
     });
   });
 });
@@ -117,12 +122,13 @@ app.get("/api/driver-standings", (req, res) => {
     
     db.query(sql, (err, results) => {
         if (err) {
-            console.error("Error fetching driver standings:", err);
+            console.error("Error fetching driver standings:", err.message);
             return res.status(500).json({ 
               error: "Database error fetching driver standings",
               details: err.message 
             });
         }
+        console.log(`✅ Fetched ${results.length} driver standings`);
         res.json(results);
     });
 });
@@ -145,12 +151,13 @@ app.get("/api/team-standings", (req, res) => {
     
     db.query(sql, (err, results) => {
         if (err) {
-            console.error("Error fetching team standings:", err);
+            console.error("Error fetching team standings:", err.message);
             return res.status(500).json({ 
               error: "Database error fetching team standings",
               details: err.message 
             });
         }
+        console.log(`✅ Fetched ${results.length} team standings`);
         res.json(results);
     });
 });
@@ -170,12 +177,13 @@ app.get("/api/races", (req, res) => {
     
     db.query(sql, (err, results) => {
         if (err) {
-            console.error("Error fetching races:", err);
+            console.error("Error fetching races:", err.message);
             return res.status(500).json({ 
               error: "Database error fetching races",
               details: err.message 
             });
         }
+        console.log(`✅ Fetched ${results.length} races`);
         res.json(results);
     });
 });
@@ -203,12 +211,13 @@ app.get("/api/drivers", (req, res) => {
     
     db.query(sql, (err, results) => {
         if (err) {
-            console.error("Error fetching drivers:", err);
+            console.error("Error fetching drivers:", err.message);
             return res.status(500).json({ 
               error: "Database error",
               details: err.message 
             });
         }
+        console.log(`✅ Fetched ${results.length} drivers`);
         res.json(results);
     });
 });
@@ -238,12 +247,13 @@ app.post("/api/drivers", (req, res) => {
 
     db.query(sql, values, (err, result) => {
         if (err) {
-            console.error("Error adding driver:", err);
+            console.error("Error adding driver:", err.message);
             return res.status(500).json({ 
               error: "Database error",
               details: err.message 
             });
         }
+        console.log(`✅ Added new driver: ${FirstName} ${LastName}`);
         res.status(201).json({ 
             Driver_ID: result.insertId, 
             FirstName, 
@@ -263,7 +273,7 @@ app.delete("/api/drivers/:id", (req, res) => {
 
     db.query(sql, [id], (err, result) => {
         if (err) {
-            console.error("Error deleting driver:", err);
+            console.error("Error deleting driver:", err.message);
             return res.status(500).json({ 
               error: "Database error",
               details: err.message 
@@ -272,6 +282,7 @@ app.delete("/api/drivers/:id", (req, res) => {
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: "Driver not found" });
         }
+        console.log(`✅ Deleted driver ID: ${id}`);
         res.status(200).json({ message: "Driver deleted successfully" });
     });
 });
@@ -304,7 +315,7 @@ app.put("/api/drivers/:id", (req, res) => {
 
     db.query(sql, values, (err, result) => {
         if (err) {
-            console.error("Error updating driver:", err);
+            console.error("Error updating driver:", err.message);
             return res.status(500).json({ 
               error: "Database error",
               details: err.message 
@@ -313,6 +324,7 @@ app.put("/api/drivers/:id", (req, res) => {
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: "Driver not found" });
         }
+        console.log(`✅ Updated driver ID: ${id}`);
         res.status(200).json({ 
             Driver_ID: id, 
             FirstName, 
@@ -325,10 +337,29 @@ app.put("/api/drivers/:id", (req, res) => {
     });
 });
 
+// Catch-all 404 handler
+app.use((req, res) => {
+    res.status(404).json({ 
+        error: "Not Found", 
+        message: `Route ${req.method} ${req.url} not found`,
+        availableRoutes: [
+            'GET /',
+            'GET /api/health',
+            'GET /api/driver-standings',
+            'GET /api/team-standings', 
+            'GET /api/races',
+            'GET /api/drivers',
+            'POST /api/drivers',
+            'PUT /api/drivers/:id',
+            'DELETE /api/drivers/:id'
+        ]
+    });
+});
+
 // Start the Server
 app.listen(port, '0.0.0.0', () => {
     console.log(`🚀 Backend server running on port ${port}`);
     console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🔗 Health check: http://localhost:${port}/api/health`);
+    console.log(`🔗 Health check available at /api/health`);
     console.log(`🗄️  Database: ${dbConfig.database}@${dbConfig.host}`);
 });
